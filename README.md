@@ -65,4 +65,6 @@ In order for a Nextion callback function to update variables, they must be decla
 
 Wire the power supply, Nextion Display, LED strip, and two Arduino Pro Micros according to the following circuit diagram:  
 TODO add diagram  
-If running the LEDs across two sides of the room like I did, be careful not to leave more than 15 feet of wire between any two lights. This causes loss of data.
+If running the LEDs across two sides of the room like I did, be careful not to leave more than 15 feet of wire between any two lights. This causes loss of data.  
+
+# TODO: move to lfs to make clones faster without the gifs and other images
