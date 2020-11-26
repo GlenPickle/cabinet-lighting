@@ -20,15 +20,32 @@ In order for a Nextion callback function to update variables, they must be decla
 ![](images/set_time.jpg "Set Time")  
 
 ## Light Images:
-![](images/cyan.jpg "Cyan")
-![](images/all_colors.jpg "All Colors")
-![](images/under_cabinet.jpg "Under Cabinet")
+### Solid color choices:
+![](images/white.jpg "White")
+![](images/green.jpg "Green")
+![](images/aqua.jpg "Aqua")
+![](images/blue.jpg "Blue")
+![](images/purple.jpg "Purple")
+![](images/color_all.jpg "Color All")
+![](images/cyan_under.jpg "Cyan Under")
+![](images/under_view.jpg "All Under")
+### Pulse Effect:
+![](images/pulse.gif "Pulse Effect")
+### Alternating Effect
+![](images/alternating.gif "Alternating")
+### Snake Effect
+![](images/snake.gif "Snake")
+### Rainbow Effect
+![](images/rainbow.gif "Rainbow")
+### Dance Party Effect
+![](images/dance_party.gif "Dance Party")
 
 ## How To Recreate:
 ### Software:
 #### Dependencies:
-[Nextion Arduino Library](https://nextion.tech/resources/download/libraries/)
-[FastLED Library](https://github.com/FastLED/FastLED/releases)
+* [Nextion Arduino Library](https://nextion.tech/resources/download/libraries/)
+* [FastLED Library](https://github.com/FastLED/FastLED/releases)
+* arduino-mk
 
 #### Steps:
 1. Install dependencies
