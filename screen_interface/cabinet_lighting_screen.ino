@@ -31,6 +31,7 @@ typedef enum
 } color_t;
 
 /***************************** BEGIN GLOBALS *********************************/
+/* Note that in order for the nextion library to update variables they must be declared globally. */
 
 // global variables for the light settings: action, color, brightness and speed
 led_action_t G_action             = LED_OFF;

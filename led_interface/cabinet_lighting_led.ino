@@ -44,6 +44,7 @@ class colorInfo
 };
 
 /**************************** Begin Globals ********************************/
+/* Using global variables to work within the arduino Loop function and keep parity with the screen interface code */
 
 // Global variables used by multiple modes
 led_action_t G_action    = LED_OFF;
