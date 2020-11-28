@@ -9,36 +9,36 @@ In order for a Nextion callback function or Wire receiveEvent to update variable
 
 ## Screen Images:  
 ### The home screen:
-![](images/home_screen.jpg "Home Screen")  
+![](https://imgur.com/g3xNJNB.jpg)  
 ### The color selection screen:
-![](images/color_screen.jpg "Color Selection")  
+![](https://imgur.com/DqQiqbl.jpg)
 ### The sliders to update brightness and speed:
-![](images/bright_speed.jpg "Brightness and Speed")  
+![](https://imgur.com/NN62oMc.jpg)
 ### The settings screen:
-![](images/settings.jpg "Settings Screen")  
+![](https://imgur.com/PV3pKLu.jpg)
 ### The Clock update screen. This is also used to set the times to turn off and on automatically:
-![](images/set_time.jpg "Set Time")  
+![](https://imgur.com/fFX4if3.jpg)  
 
 ## Light Images:
 ### Solid color choices:
-![](images/white.jpg "White")
-![](images/green.jpg "Green")
-![](images/aqua.jpg "Aqua")
-![](images/blue.jpg "Blue")
-![](images/purple.jpg "Purple")
-![](images/color_all.jpg "Color All")
-![](images/cyan_under.jpg "Cyan Under")
-![](images/under_view.jpg "All Under")
+![](https://imgur.com/GQHbBjE.jpg)
+![](https://imgur.com/pAfZUNj.jpg)
+![](https://imgur.com/WPkfoqP.jpg)
+![](https://imgur.com/Iu7Ayx7.jpg)
+![](https://imgur.com/XyIGFUx.jpg)
+![](https://imgur.com/LpxenCV.jpg)
+![](https://imgur.com/Vy53HG7.jpg)
+![](https://imgur.com/F3ouQmn.jpg)
 ### Pulse Effect:
-![](images/pulse.gif "Pulse Effect")
+![](https://imgur.com/Kig4Fbj.gif)
 ### Alternating Effect
-![](images/alternating.gif "Alternating")
+![](https://imgur.com/s1GE6zj.gif)
 ### Snake Effect
-![](images/snake.gif "Snake")
+![](https://imgur.com/RDVmpQt.gif)
 ### Rainbow Effect
-![](images/rainbow.gif "Rainbow")
+![](https://imgur.com/sl5Ig2u.gif)
 ### Dance Party Effect
-![](images/dance_party.gif "Dance Party")
+![](https://imgur.com/AlfyOWI.gif)
 
 ## How To Recreate:
 ### Software:
@@ -65,7 +65,5 @@ In order for a Nextion callback function or Wire receiveEvent to update variable
 5. The file to have the wall plate laser cut is available in the Nextion Directory of this repo. I used Ponoko to have it made. It fits a low voltage double gang wall box.
 
 Wire the power supply, Nextion Display, LED strip, and two Arduino Pro Micros according to the following circuit diagram:  
-TODO add diagram  
+![](https://imgur.com/bCpbyhI.png)  
 If running the LEDs across two sides of the room like I did, be careful not to leave more than 15 feet of wire between any two lights. This causes loss of data.  
-
-# TODO: move to lfs to make clones faster without the gifs and other images
