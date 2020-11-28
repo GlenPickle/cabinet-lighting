@@ -20,15 +20,32 @@ In order for a Nextion callback function or Wire receiveEvent to update variable
 ![](images/set_time.jpg "Set Time")  
 
 ## Light Images:
-![](images/cyan.jpg "Cyan")
-![](images/all_colors.jpg "All Colors")
-![](images/under_cabinet.jpg "Under Cabinet")
+### Solid color choices:
+![](images/white.jpg "White")
+![](images/green.jpg "Green")
+![](images/aqua.jpg "Aqua")
+![](images/blue.jpg "Blue")
+![](images/purple.jpg "Purple")
+![](images/color_all.jpg "Color All")
+![](images/cyan_under.jpg "Cyan Under")
+![](images/under_view.jpg "All Under")
+### Pulse Effect:
+![](images/pulse.gif "Pulse Effect")
+### Alternating Effect
+![](images/alternating.gif "Alternating")
+### Snake Effect
+![](images/snake.gif "Snake")
+### Rainbow Effect
+![](images/rainbow.gif "Rainbow")
+### Dance Party Effect
+![](images/dance_party.gif "Dance Party")
 
 ## How To Recreate:
 ### Software:
 #### Dependencies:
-[Nextion Arduino Library](https://nextion.tech/resources/download/libraries/)
-[FastLED Library](https://github.com/FastLED/FastLED/releases)
+* [Nextion Arduino Library](https://nextion.tech/resources/download/libraries/)
+* [FastLED Library](https://github.com/FastLED/FastLED/releases)
+* arduino-mk
 
 #### Steps:
 1. Install dependencies
@@ -49,4 +66,6 @@ In order for a Nextion callback function or Wire receiveEvent to update variable
 
 Wire the power supply, Nextion Display, LED strip, and two Arduino Pro Micros according to the following circuit diagram:  
 TODO add diagram  
-If running the LEDs across two sides of the room like I did, be careful not to leave more than 15 feet of wire between any two lights. This causes loss of data.
+If running the LEDs across two sides of the room like I did, be careful not to leave more than 15 feet of wire between any two lights. This causes loss of data.  
+
+# TODO: move to lfs to make clones faster without the gifs and other images
