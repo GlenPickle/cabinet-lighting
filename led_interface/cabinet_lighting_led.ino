@@ -2,99 +2,18 @@
  
 #include <Wire.h>
 #include "FastLED.h"
+#include "led_interface.h"
 
-#define LED_DATA_PIN 9
-#define INSTRUCTION_PIN 3
-#define READY_PIN 10
-#define LED_TYPE WS2812B
-#define COLOR_ORDER GRB
-#define NUM_LEDS 256
-#define BRIGHTNESS 96
+/************************** Begin Globals ************************************/
+// The Arduino Wire library requires these vars to be global
+ColorSettings    G_settings;
+AlternatingPulse G_altPulse;
+SnakePosition    G_snakePos;
+Rainbow          G_rainbow;
 
-// A list of all possible LED Modes
-typedef enum
-{
-    LED_SOLID,
-    LED_PULSE,
-    LED_SNAKE,
-    LED_ALTERNATING,
-    LED_RAINBOW,
-    LED_DANCEPARTY,
-    LED_OFF
-} led_action_t;
-
-// A list of all available G_colors
-typedef enum
-{
-    GREEN,
-    BLUE,
-    PURPLE,
-    WHITE,
-    CYAN,
-    ALL,
-    RED
-} color_t;
-
-class colorInfo
-{
-    public:
-    uint32_t h;
-    uint32_t s;
-    uint32_t v;
-};
-
-/**************************** Begin Globals ********************************/
-/* Using global variables to work within the arduino Loop function and keep parity with the screen interface code */
-
-// Global variables used by multiple modes
-led_action_t G_action    = LED_OFF;
-led_action_t G_tmpAction = LED_OFF; // for some modes don't want to update G_action until after a G_color is chosen
-
-// set defaults for the G_colors so that variables aren't referenced before assignment
-color_t      G_color     = GREEN;
-color_t      G_color2    = GREEN;
-color_t      G_tmpColor  = GREEN;
-color_t      G_tmpColor2 = GREEN;
-
-colorInfo    G_currentColor;
-colorInfo    G_currentColor2;
-
-uint32_t     G_currentHue;
-uint32_t     G_currentSat;
-uint32_t     G_currentVal;
-
-long         G_delayTime = 250L;
-
-uint32_t     G_brightnessPosition;
-uint32_t     G_SpeedPosition;
-
-// Global variables used to alternate G_colors and pulse
-uint32_t     G_altHue;
-uint32_t     G_altSat;
-float        G_altVal;
-uint32_t     G_altHueDelta;
-float        G_delta; 
-float        G_pulseSpeed = 1.0; // default G_altValue that will be changed by the slider
-float        G_altValueMin;
-float        G_altValueMax;
-uint32_t     G_altHueA;
-uint32_t     G_altSatA;
-uint32_t     G_altHueB;
-uint32_t     G_altSatB;
-float        G_dv;
-
-// variable used by just snake
-uint32_t     G_snakeTail = 0;
-uint32_t     G_snakeQuarter = NUM_LEDS / 4;
-
-// variables used just by rainbow
-uint32_t     G_rainbowIndex = 0;
-uint32_t     G_rainbowHue = 0;
-
-// set up array for LEDs
+// array for LEDs
 CRGB         leds[NUM_LEDS];
-
-/****************************** End Globals **********************************/
+/*************************** End Globals *************************************/
 
 
 /******************************************************************************
@@ -102,10 +21,6 @@ CRGB         leds[NUM_LEDS];
 **  Function Name: solidHSV
 **
 **  Purpose: Change the color of all lights to a single solid color
-**
-**  Globals Used: leds
-**
-**  Globals Set: none
 **
 ******************************************************************************/
 void solidHSV(uint32_t H, uint32_t S, uint32_t V) {
@@ -119,130 +34,135 @@ void solidHSV(uint32_t H, uint32_t S, uint32_t V) {
 
 /******************************************************************************
 **
+**  Function Name: showErrorLights
+**
+**  Purpose: To light up all the lights red when an error is detected
+**
+******************************************************************************/
+void showErrorLights(ColorSettings *colorSettings)
+{
+    colorSettings->action = LED_SOLID;
+    colorSettings->color = RED;
+    colorSettings->currentColor.hue = 0;
+    colorSettings->currentColor.sat = 255;
+    colorSettings->currentColor.val = 127;
+    solidHSV(colorSettings->currentColor.hue,
+             colorSettings->currentColor.sat,
+             colorSettings->currentColor.val);
+}
+
+
+/******************************************************************************
+**
 **  Function Name: updateLights
 **
 **  Purpose: If an animation is running, update to the next step
 **
-**  Globals Used: leds, G_action, G_color, G_altSat, G_altVal, G_AltValueMin,
-**                G_altValueMax, G_altHueA, G_AltHue_B, G_delta, G_dv,
-**                G_snakeTail, G_snakeQuarter, G_dv, G_currentHue,
-**                G_currentSat, G_currentVal, G_rainbowIndex
-**
-**  Globals Set: G_dv, G_altVal, G_altHue, G_altSat, leds, G_snakeTail,
-**               G_rainbowIndex, G_rainbowHue
-**
 ******************************************************************************/
-void updateLights()
+void updateLights(ColorSettings *colorSettings, AlternatingPulse *altPulse,
+                  SnakePosition *snakePos, Rainbow *rainbow)
 {
-    switch(G_action)
+    switch(colorSettings->action)
     {
         case LED_SOLID:
         case LED_OFF:
-            break; // these cases need no updating, the G_color is set in the button callback
+            break; // these cases need no updating, the color is set in the button callback
 
         case LED_PULSE:
             // For pulse we update by changing the brightness of all the lights by one step
-            G_dv = ((exp(sin(G_pulseSpeed * millis()/2000.0*PI)) -0.36787944) * G_delta);
-            G_altVal = G_altValueMin + G_dv;
-            G_altHue = map(G_altVal, G_altValueMin, G_altValueMax, G_altHueA, G_altHueB);  // Map G_altHue based on current G_altVal
-            G_altSat = map(G_altVal, G_altValueMin, G_altValueMax, G_altSatA, G_altSatB);  // Map G_altSat based on current G_altVal
+            altPulse->dv = ((exp(sin(altPulse->pulseSpeed * millis()/2000.0*PI)) -0.36787944) * altPulse->delta);
+            altPulse->altVal = altPulse->altValueMin + altPulse->dv;
+
+            // Map altHue based on current altVal
+            altPulse->altHue = map(altPulse->altVal, altPulse->altValueMin, altPulse->altValueMax,
+                                   altPulse->altHueA, altPulse->altHueB);
+
+            // Map altSat based on current altVal
+            altPulse->altSat = map(altPulse->altVal, altPulse->altValueMin, altPulse->altValueMax,
+                                   altPulse->altSatA, altPulse->altSatB);
     
+            // for the "all" color selection we set each individual light it's own color and pulse to black
             for (uint32_t i = 0; i < NUM_LEDS; i++)
             {
-                if (G_color == ALL)
+                if (colorSettings->color == ALL)
                 {
-                    G_altHue = i;
+                    altPulse->altHue = i;
                 }
-                leds[i] = CHSV(G_altHue, G_altSat, G_altVal);
+                leds[i] = CHSV(altPulse->altHue, altPulse->altSat, altPulse->altVal);
             }
             FastLED.show();
             break;
 
         case LED_SNAKE:
+            snakePos->tail = snakePos->tail++ % NUM_LEDS;
+            snakePos->head = snakePos->tail + snakePos->quarter % NUM_LEDS;
+
             // For snake we update by lighting up one more light and turning off one at the beginning
-            leds[G_snakeTail] = CRGB(0, 0, 0);
-            if (G_snakeTail + G_snakeQuarter >= NUM_LEDS)
+            leds[snakePos->tail] = CRGB(0, 0, 0);
+            if (colorSettings->color == ALL)
             {
-                if (G_color == ALL)
-                {
-                    G_currentHue = G_snakeTail + G_snakeQuarter - NUM_LEDS;
-                }
-                leds[G_snakeTail + G_snakeQuarter - NUM_LEDS] = CHSV(G_currentHue, G_currentSat, G_currentVal);
+                colorSettings->currentColor.hue = snakePos->head;
             }
-            else
-            {
-                if (G_color == ALL)
-                {
-                    G_currentHue = G_snakeTail + G_snakeQuarter;
-                }
-                leds[G_snakeTail + G_snakeQuarter] = CHSV(G_currentHue, G_currentSat, G_currentVal);
-            }
-            G_snakeTail++;
-            if (G_snakeTail == NUM_LEDS)
-            {
-                G_snakeTail = 0;
-            }
+            leds[snakePos->head] = CHSV(colorSettings->currentColor.hue,
+                                        colorSettings->currentColor.sat,
+                                        colorSettings->currentColor.val);
             FastLED.show();
-            delay(G_delayTime);
+            delay(colorSettings->delayTime);
             break;
 
         case LED_RAINBOW:
-            // for rainbow we increment the G_altHue of each light by one, resetting if the G_altHue is over 255
+            // for rainbow we increment the hue of each light by one, rolling over to 0 if the hue is over 255
             for (uint32_t i = 0; i < NUM_LEDS; i++)
             {
-                if (G_rainbowIndex + i > 255)
-                {
-                   G_rainbowHue = G_rainbowIndex + i - 255;
-                }
-                else
-                {
-                    G_rainbowHue = G_rainbowIndex + i;
-                }
-                leds[i] = CHSV(G_rainbowHue, 255, G_currentVal);
+                rainbow->hue = (rainbow->index + i > 255) ? rainbow->index + i - 255 : rainbow->index + i;
+                leds[i] = CHSV(rainbow->hue, 255, colorSettings->currentColor.val);
             }
-            G_rainbowIndex++;
+            rainbow->index++;
             FastLED.show();
-            delay(G_delayTime);
+            delay(colorSettings->delayTime);
             break;
     
         case LED_ALTERNATING:
-            // for alternating we update by changing the G_altHue of all the lights by one step
-            // if the G_color is all we just cycle through all G_colors
-            if (G_color == ALL || G_color2 == ALL)
+            // for alternating we update by changing the altHue of all the lights by one step
+            // if the color is all we just cycle through all colors
+            if (colorSettings->color == ALL || colorSettings->color2 == ALL)
             {
-                G_currentHue++;
-                if (G_currentHue >= 255)
+                colorSettings->currentColor.hue++;
+                if (colorSettings->currentColor.hue >= 255)
                 {
-                    G_currentHue = 0;
+                    colorSettings->currentColor.hue = 0;
                 }
-                solidHSV(G_currentHue, 255, G_currentVal);
-                delay(G_delayTime);
+                solidHSV(colorSettings->currentColor.hue, 255, colorSettings->currentColor.val);
+                delay(colorSettings->delayTime);
             }
-            // otherwise we find a step between the two chosen G_colors, and change each light to this G_altHue
+            // otherwise we find a step between the two chosen colors, and change each light to this altHue
             else
             {
-                G_dv = ((exp(sin(G_pulseSpeed * millis()/2000.0*PI)) -0.36787944) * G_delta);
-                G_altVal = G_altValueMin + G_dv;
-                G_altHue = map(G_altVal, G_altValueMin, G_altValueMax, G_altHueA, G_altHueB);  // Map G_altHue based on current G_altVal
-                G_altSat = map(G_altVal, G_altValueMin, G_altValueMax, G_altSatA, G_altSatB);  // Map G_altSat based on current G_altVal
-    
-                for (uint32_t i = 0; i < NUM_LEDS; i++)
-                {
-                    leds[i] = CHSV(G_altHue, G_altSat, G_altVal);
-                }
-                FastLED.show();
+                // For pulse we update by changing the brightness of all the lights by one step
+                altPulse->dv = ((exp(sin(altPulse->pulseSpeed * millis()/2000.0*PI)) -0.36787944) * altPulse->delta);
+                altPulse->altVal = altPulse->altValueMin + altPulse->dv;
+
+                // Map altHue based on current altVal
+                altPulse->altHue = map(altPulse->altVal, altPulse->altValueMin, altPulse->altValueMax,
+                                       altPulse->altHueA, altPulse->altHueB);
+
+                // Map altSat based on current altVal
+                altPulse->altSat = map(altPulse->altVal, altPulse->altValueMin, altPulse->altValueMax,
+                                       altPulse->altSatA, altPulse->altSatB);
+
+                solidHSV(altPulse->altHue, altPulse->altSat, altPulse->altVal);
             }
             break;
 
         case LED_DANCEPARTY:
-            // for Dance Party we just go totally random for every light, with max brightness
+            // for Dance Party we just go totally random for every light, with max brightness and saturation
             for (int i=0; i<NUM_LEDS; i++)
             {
                 int h = random() % 256;
                 leds[i] = CHSV(h, 255, 255);
             }
             FastLED.show();
-            delay(G_delayTime);
+            delay(colorSettings->delayTime);
             break;
     } 
 }
@@ -254,166 +174,144 @@ void updateLights()
 **
 **  Purpose: If the color selection from the screen has changed, set the globals
 **
-**  Globals Used: G_tmpAction, G_action, G_tmpColor, G_color, G_currentColor,
-**                
-**
-**  Globals Set: G_color, G_color2, G_currentColor, G_currentHue, G_currentSat,
-**               G_currentVal, G_snakeTail
-**
 ******************************************************************************/
-void updateColor()
+void updateColor(ColorSettings *colorSettings, AlternatingPulse *altPulse,
+                 SnakePosition *snakePos)
 {
-    if (G_tmpAction == G_action && G_tmpColor == G_color)
+    if (colorSettings->tmpAction == colorSettings->action && colorSettings->tmpColor == colorSettings->color)
     {
         return; // no buttons have been pressed, so just exit
     }
-    G_color = G_tmpColor;
-    G_color2 = G_tmpColor2;
-    if (G_color == ALL || G_color == RED)
+    colorSettings->color = colorSettings->tmpColor;
+    colorSettings->color2 = colorSettings->tmpColor2;
+
+    // by default set to full saturation and medium brightness
+    colorSettings->currentColor.sat = 255;
+    colorSettings->currentColor.val = 127;
+    switch (colorSettings->color)
     {
-        G_currentColor.h = 0; // start with Red
-        G_currentColor.s = 255;
-        G_currentColor.v = 127;
-    }
-    else if (G_color == GREEN)
-    {
-        G_currentColor.h = 96;
-        G_currentColor.s = 255;
-        G_currentColor.v = 127;
-    }
-    else if (G_color == CYAN)
-    {
-        G_currentColor.h = 128;
-        G_currentColor.s = 255;
-        G_currentColor.v = 127;
-    }
-    else if (G_color == BLUE)
-    {
-        G_currentColor.h = 160;
-        G_currentColor.s = 255;
-        G_currentColor.v = 127;
-    }
-    else if (G_color == PURPLE)
-    {
-        G_currentColor.h = 192;
-        G_currentColor.s = 255;
-        G_currentColor.v = 127;
-    }
-    else if (G_color == WHITE)
-    {
-        G_currentColor.h = 0;
-        G_currentColor.s = 0;
-        G_currentColor.v = 127;
+        case ALL:
+        case RED:
+            colorSettings->currentColor.hue = 0;
+            break;
+        case GREEN:
+            colorSettings->currentColor.hue = 96;
+            break;
+        case CYAN:
+            colorSettings->currentColor.hue = 128;
+            break;
+        case BLUE:
+            colorSettings->currentColor.hue = 160;
+            break;
+        case PURPLE:
+            colorSettings->currentColor.hue = 192;
+            break;
+        case WHITE:
+            colorSettings->currentColor.hue = 0;
+            colorSettings->currentColor.sat = 0; // White has no saturation
+            break;
+        default:
+            showErrorLights(colorSettings);
+            break;
     }
 
-    // set up G_color2
-    if (G_color2 == ALL || G_color2 == RED)
+    // set up color2
+    colorSettings->currentColor2.sat = 255;
+    colorSettings->currentColor2.val = 127;
+    switch (colorSettings->color2)
     {
-        G_currentColor2.h = 0;
-        G_currentColor2.s = 255;
-        G_currentColor2.v = 127;
-    }
-    else if (G_color2 == GREEN)
-    {
-        G_currentColor2.h = 96;
-        G_currentColor2.s = 255;
-        G_currentColor2.v = 127;
-    }
-    else if (G_color2 == CYAN)
-    {
-        G_currentColor2.h = 128;
-        G_currentColor2.s = 255;
-        G_currentColor2.v = 127;
-    }
-    else if (G_color2 == BLUE)
-    {
-        G_currentColor2.h = 160;
-        G_currentColor2.s = 255;
-        G_currentColor2.v = 127;
-    }
-    else if (G_color2 == PURPLE)
-    {
-        G_currentColor2.h = 192;
-        G_currentColor2.s = 255;
-        G_currentColor2.v = 127;
-    }
-    else if (G_color2 == WHITE)
-    {
-        G_currentColor2.h = 0;
-        G_currentColor2.s = 0;
-        G_currentColor2.v = 127;
+        case ALL:
+        case RED:
+            colorSettings->currentColor2.hue = 0;
+            break;
+        case GREEN:
+            colorSettings->currentColor2.hue = 96;
+            break;
+        case CYAN:
+            colorSettings->currentColor2.hue = 128;
+            break;
+        case BLUE:
+            colorSettings->currentColor2.hue = 160;
+            break;
+        case PURPLE:
+            colorSettings->currentColor2.hue = 192;
+            break;
+        case WHITE:
+            colorSettings->currentColor2.hue = 0;
+            colorSettings->currentColor2.sat = 0; // White has no saturation
+            break;
+        default:
+            showErrorLights(colorSettings);
+            break;
     }
 
-
-    if (G_tmpAction == LED_SOLID)
+    switch (colorSettings->tmpAction)
     {
-        G_currentHue = G_currentColor.h;
-        G_currentSat = G_currentColor.s;
-        G_currentVal = G_currentColor.v;
-        if (G_color == ALL)
-        {
-            // each light gets it's own G_altHue
-            for (uint32_t i = 0; i < NUM_LEDS; ++i) 
+        case LED_SOLID:
+            if (colorSettings->color == ALL)
+            {
+                // each light gets it's own altHue
+                for (uint32_t i = 0; i < NUM_LEDS; ++i) 
+                { 
+                    leds[i] = CHSV(i, colorSettings->currentColor.sat, colorSettings->currentColor.val); 
+                } 
+                FastLED.show();
+            }
+            else
             { 
-                leds[i] = CHSV(i,G_currentSat,G_currentVal); 
-            } 
+                // each light gets the same altHue
+                solidHSV(0,
+                         colorSettings->currentColor.sat,
+                         colorSettings->currentColor.val);
+            }
+            colorSettings->action = colorSettings->tmpAction;
+            break;
+        case LED_PULSE:
+            // set up altHues so we can calculate the steps between them
+            altPulse->altHueA = colorSettings->currentColor.hue;
+            altPulse->altSatA = colorSettings->currentColor.sat;
+            altPulse->altValueMin = 40.0; // pulse is just alternating between color and its dimmer self
+    
+            altPulse->altHueB = colorSettings->currentColor.hue;
+            altPulse->altSatB = colorSettings->currentColor.sat;
+            altPulse->altValueMax = 127.0;  // Go to half brightness by default
+    
+            altPulse->altHue = altPulse->altHueA;
+            altPulse->altSat = altPulse->altSatA;
+            altPulse->altVal = altPulse->altValueMin;
+            altPulse->altHueDelta = altPulse->altHueA - altPulse->altHueB;
+            altPulse->delta = (altPulse->altValueMax - altPulse->altValueMin) / 2.35040238;  // Do Not Edit
+            colorSettings->action = colorSettings->tmpAction;
+            break;
+        case LED_ALTERNATING:
+    	    altPulse->altHueA = colorSettings->currentColor.hue;
+    	    altPulse->altSatA = colorSettings->currentColor.sat;
+    	    altPulse->altValueMin = 120.0;  // Pulse minimum altValue (Should be less then altValueMax).
+    
+            altPulse->altHueB = colorSettings->currentColor2.hue;
+            altPulse->altSatB = colorSettings->currentColor2.sat; 
+            altPulse->altValueMax = 255.0;  // Pulse maximum altValueMax (Should be larger then altValueMin).
+            altPulse->delta = (altPulse->altValueMax - altPulse->altValueMin) / SMOOTH_DELTA;
+    
+            colorSettings->action = colorSettings->tmpAction;
+            break;
+        case LED_SNAKE:
+            FastLED.clear();
+            snakePos->tail = 0; // we'll start at the beginning of the strand
+            // turn on the first part of the snake
+            for (uint32_t i = 0; i <= snakePos->quarter; i++)
+            {
+                leds[i] = CHSV(colorSettings->currentColor.hue,
+                               colorSettings->currentColor.sat,
+                               colorSettings->currentColor.val);
+            }
             FastLED.show();
-        }
-        else
-        { 
-            // each light gets the same G_altHue
-            solidHSV(G_currentHue, G_currentSat, G_currentVal);
-        }
-        G_action = G_tmpAction;
-    }
-    else if (G_tmpAction == LED_PULSE)
-    {
-        // set up G_altHues so we can calculate the steps between them
-        G_altHueA = G_currentColor.h;
-        G_altSatA = G_currentColor.s;
-        G_altValueMin = 40.0;
-
-        G_altHueB = G_currentColor.h;
-        G_altSatB = G_currentColor.s;
-        G_altValueMax = 127.0;  // Go to half brightness by default
-
-        G_altHue = G_altHueA;
-        G_altSat = G_altSatA;
-        G_altVal = G_altValueMin;
-        G_altHueDelta = G_altHueA - G_altHueB;
-        G_delta = (G_altValueMax - G_altValueMin) / 2.35040238;  // Do Not Edit
-        G_action = G_tmpAction;
-    }
-    else if (G_tmpAction == LED_ALTERNATING)
-    {
-	G_altHueA = G_currentColor.h;  // Start G_altHue at G_altValueMin.
-	G_altSatA = G_currentColor.s;  // Start G_altSaturation at G_altValueMin.
-	G_altValueMin = 120.0;  // Pulse minimum G_altValue (Should be less then G_altValueMax).
-
-        G_altHueB = G_currentColor2.h;  // End G_altHue at G_altValueMax.
-        G_altSatB = G_currentColor2.s;  // End G_altSaturation at G_altValueMax.
-        G_altValueMax = 255.0;  // Pulse maximum G_altValue (Should be larger then G_altValueMin).
-        G_delta = (G_altValueMax - G_altValueMin) / 2.35040238;  // Do Not Edit
-
-        G_action = G_tmpAction;
-    }
-    else if (G_tmpAction == LED_SNAKE)
-    {
-        G_currentHue = G_currentColor.h;
-        G_currentSat = G_currentColor.s;
-        G_currentVal = G_currentColor.v;
-
-        FastLED.clear();
-        FastLED.show();
-        G_snakeTail = 0; // we'll start at the beginning of the strand
-        // turn on the first part of the snake
-        for (uint32_t i = 0; i <= G_snakeQuarter; i++)
-        {
-            leds[i] = CHSV(G_currentHue, G_currentSat, G_currentVal);
-        }
-        FastLED.show();
-
-        G_action = G_tmpAction;
+    
+            colorSettings->action = colorSettings->tmpAction;
+            break;
+        default:
+            showErrorLights(colorSettings);
+            break;
     }
 }
 
@@ -424,38 +322,37 @@ void updateColor()
 **
 **  Purpose: If the action selection has changed, update globals
 **
-**  Globals Used: G_tmp_Action, G_action, G_tmpColor, G_color
-**
-**  Globals Set: G_delayTime, G_action, G_currentVal
-**
 ******************************************************************************/
-void updateAction()
+void updateAction(ColorSettings *colorSettings)
 {
-    if (G_tmpAction == G_action && G_tmpColor == G_color)
+    if (colorSettings->tmpAction == colorSettings->action && 
+        colorSettings->tmpColor == colorSettings->color)
     {
         return; // no buttons have been pressed, so just exit
     }
-    switch (G_tmpAction)
+    switch (colorSettings->tmpAction)
     {
+        case LED_SOLID:
         case LED_PULSE:
             break;
         case LED_SNAKE:
-            G_delayTime = 250L;
+            colorSettings->delayTime = 250L;
             break;
         case LED_RAINBOW:
-            G_action = LED_RAINBOW; // no G_color selection so start this mode
+            colorSettings->action = LED_RAINBOW; // no color selection so start this mode
             break;
         case LED_DANCEPARTY:
-            G_currentVal = 255;
-            G_delayTime = 250L;
-            G_action = LED_DANCEPARTY; // no G_color selection so start this mode
+            colorSettings->currentColor.val = 255;
+            colorSettings->delayTime = 250L;
+            colorSettings->action = LED_DANCEPARTY; // no color selection so start this mode
             break;
         case LED_OFF:
             FastLED.clear();
             FastLED.show();
-            G_action = LED_OFF; // no G_color selection so start this mode
+            colorSettings->action = LED_OFF; // no color selection so start this mode
             break;
         default:
+            showErrorLights(colorSettings);
             break;
     }
 }
@@ -466,45 +363,42 @@ void updateAction()
 **  Function Name: updateBrightness
 **
 **  Purpose: If the brightness instruction on the screen has changed, update
-**           the global variables that track brightness
-**
-**  Globals Used: G_brightnessPosition, G_action, G_color, G_currentHue,
-**                G_currentSat, G_currentVal, G_altValueMin
-**
-**  Globals Set: G_currentVal, G_altValueMax, G_delta
+**           the variables that track brightness
 **
 ******************************************************************************/
-void updateBrightness()
+void updateBrightness(ColorSettings *colorSettings, AlternatingPulse *altPulse)
 {
-    G_currentVal = G_brightnessPosition;
-    if (G_action == LED_SOLID)
+    colorSettings->currentColor.val = colorSettings->brightness;
+    if (colorSettings->action == LED_SOLID)
     {
-        if (G_color == ALL)
+        if (colorSettings->color == ALL)
         {
             for (uint32_t i = 0; i < NUM_LEDS; i++)
             {
-                leds[i] = CHSV(i, G_currentSat, G_currentVal);
+                leds[i] = CHSV(i, colorSettings->currentColor.sat, colorSettings->currentColor.val);
             }
             FastLED.show();
         }
         else
         {
-            solidHSV(G_currentHue, G_currentSat, G_currentVal);
+            solidHSV(colorSettings->currentColor.hue,
+                     colorSettings->currentColor.sat,
+                     colorSettings->currentColor.val);
         }
     }
-    else if (G_action == LED_PULSE)
+    else if (colorSettings->action == LED_PULSE)
     {
-        G_altValueMax = G_brightnessPosition;
-        G_delta = (G_altValueMax - G_altValueMin) / 2.35040238;  // Do Not Edit
+        altPulse->altValueMax = colorSettings->brightness;
+        altPulse->delta = (altPulse->altValueMax - altPulse->altValueMin) / SMOOTH_DELTA;
     }
-    else if (G_action == LED_ALTERNATING)
+    else if (colorSettings->action == LED_ALTERNATING)
     {
-        G_altValueMax = G_brightnessPosition;
-        if (G_altValueMin >= G_altValueMax)
+        altPulse->altValueMax = colorSettings->brightness;
+        if (altPulse->altValueMin >= altPulse->altValueMax)
         {
-            G_altValueMin = G_altValueMax / 2;
+            altPulse->altValueMin = altPulse->altValueMax / 2;
         }
-        G_delta = (G_altValueMax - G_altValueMin) / 2.35040238;  // Do Not Edit
+        altPulse->delta = (altPulse->altValueMax - altPulse->altValueMin) / SMOOTH_DELTA;
     }
     return;
 }
@@ -515,34 +409,31 @@ void updateBrightness()
 **  Function Name: updateSpeed
 **
 **  Purpose: If the speed instruction on the screen has changed, update
-**           the global variables that track brightness
-**
-**  Globals Used: G_speedPosition, G_action
-**
-**  Globals Set: G_pulseSpeed, G_delayTime
+**           the variables that track brightness by scaling them according to
+**           the range of the slider values
 **
 ******************************************************************************/
-void updateSpeed()
+void updateSpeed(ColorSettings *colorSettings, AlternatingPulse *altPulse)
 {
-    if (G_action == LED_ALTERNATING)
+    if (colorSettings->action == LED_ALTERNATING)
     {
-         G_pulseSpeed = ((float) G_SpeedPosition / 250.0) + 1.0;
+         altPulse->pulseSpeed = ((float) colorSettings->speed / 250.0) + 1.0;
     }
-    else if (G_action == LED_PULSE)
+    else if (colorSettings->action == LED_PULSE)
     {
-         G_pulseSpeed = ((float) G_SpeedPosition / 250.0) + 1.0;
+         altPulse->pulseSpeed = ((float) colorSettings->speed / 250.0) + 1.0;
     }
-    else if (G_action == LED_RAINBOW)
+    else if (colorSettings->action == LED_RAINBOW)
     {
-         G_delayTime = ((100.0 -(float) G_SpeedPosition) / 100.0) * 100.0;
+         colorSettings->delayTime = ((100.0 -(float) colorSettings->speed) / 100.0) * 100.0;
     }
-    else if (G_action == LED_SNAKE)
+    else if (colorSettings->action == LED_SNAKE)
     {
-         G_delayTime = ((100.0 - (float) G_SpeedPosition) / 100.0) * 150.0;
+         colorSettings->delayTime = ((100.0 - (float) colorSettings->speed) / 100.0) * 150.0;
     }
-    else if (G_action == LED_DANCEPARTY)
+    else if (colorSettings->action == LED_DANCEPARTY)
     {
-         G_delayTime = ((100.0 -(float) G_SpeedPosition) / 100.0) * 600.0;
+         colorSettings->delayTime = ((100.0 -(float) colorSettings->speed) / 100.0) * 600.0;
     }
     return;
 }
@@ -554,19 +445,15 @@ void updateSpeed()
 **
 **  Purpose: Reads instructions from the other arduino using the Wire library
 **
-**  Globals Used: none
-**
-**  Globals Set: G_tmpAction, G_tmpColor, G_tmpColor2,
-**               G_brightnessPosition, G_speedPosition
-**
 ******************************************************************************/
 void receiveEvent(int bytes)
 {
-    G_tmpAction = (led_action_t) Wire.read();
-    G_tmpColor = (color_t) Wire.read();
-    G_tmpColor2 = (color_t) Wire.read();
-    G_brightnessPosition = (uint32_t) Wire.read();
-    G_SpeedPosition = (uint32_t) Wire.read();
+    ColorSettings *settings = &G_settings;
+    settings->tmpAction = (LedAction) Wire.read();
+    settings->tmpColor = (ColorVal) Wire.read();
+    settings->tmpColor2 = (ColorVal) Wire.read();
+    settings->brightness = (uint32_t) Wire.read();
+    settings->speed = (uint32_t) Wire.read();
 }
 
 
@@ -576,14 +463,11 @@ void receiveEvent(int bytes)
 **
 **  Purpose: An initialization function that is standard to arduinos
 **
-**  Globals Used: leds
-**
-**  Globals Set: none
-**
 ******************************************************************************/
-void setup() {
+void setup() 
+{
     // initialize LEDs
-    FastLED.addLeds<LED_TYPE, LED_DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip); // initializes LED strip
+    FastLED.addLeds<LED_TYPE, LED_DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
     FastLED.setBrightness(BRIGHTNESS);// global brightness
     
     // initialize communication
@@ -593,27 +477,19 @@ void setup() {
 
     // Attach a function to trigger when something is received from i2c
     Wire.onReceive(receiveEvent);
-}
 
+    // begin the main loop to receive instructions and update the leds
+    while (1)
+    {
+        //signal that we are ready for messages
+        digitalWrite(READY_PIN, HIGH);
+        updateAction(&G_settings);
+        updateSpeed(&G_settings, &G_altPulse);
 
-/******************************************************************************
-**
-**  Function Name: loop
-**
-**  Purpose: The main loop for the arduino. Listens for instructions from
-**           the other arduino and controls the LEDs
-**
-**  Globals Used: none
-**
-**  Globals Set: none
-**
-******************************************************************************/
-void loop() {
-    updateAction();
-    updateSpeed();
-    digitalWrite(READY_PIN, LOW); //signal that we aren't ready for messages because the next 3 functions all have blocking function calls
-    updateColor();
-    updateBrightness();
-    updateLights();
-    digitalWrite(READY_PIN, HIGH); //signal that we are ready for messages again because the first two functions have no blocking calls
+        //signal that we aren't ready for messages because the next 3 functions block
+        digitalWrite(READY_PIN, LOW);
+        updateColor(&G_settings, &G_altPulse, &G_snakePos);
+        updateBrightness(&G_settings, &G_altPulse);
+        updateLights(&G_settings, &G_altPulse, &G_snakePos, &G_rainbow);
+    }
 }

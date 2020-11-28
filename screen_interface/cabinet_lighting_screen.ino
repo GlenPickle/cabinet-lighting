@@ -2,61 +2,17 @@
 /* The sketch generated will run on the arduino connected to the TFT. */
 #include <Wire.h>
 #include "Nextion.h"
-
-#define INSTRUCTION_PIN 3
-#define READY_PIN 10
-
-// A list of all possible LED Modes
-typedef enum
-{
-    LED_SOLID,
-    LED_PULSE,
-    LED_SNAKE,
-    LED_ALTERNATING,
-    LED_RAINBOW,
-    LED_DANCEPARTY,
-    LED_OFF
-} led_action_t;
-
-// A list of all available colors
-typedef enum
-{
-    GREEN,
-    BLUE,
-    PURPLE,
-    WHITE,
-    CYAN,
-    ALL,
-    RED
-} color_t;
+#include "screen_interface.h"
 
 /***************************** BEGIN GLOBALS *********************************/
 /* Note that in order for the nextion library to update variables they must be declared globally. */
-
 // global variables for the light settings: action, color, brightness and speed
-led_action_t G_action             = LED_OFF;
-int          G_chosen             = 0; // for alternating we will need to wait for two colors to be G_chosen
-boolean      G_haveUpdate         = false;
-boolean      G_onTime             = false;
-uint32_t     G_brightnessPosition = 127;
-uint32_t     G_speedPosition      = 50;
-color_t      G_color;
-color_t      G_color2;
-
-// global variables for tracking how much time has passed
-unsigned long G_currentTime;
-unsigned long G_previousTime = 0;
+Settings G_settings;
 
 // global variables for the auto on and off feature
-char         G_timeBuf[30]       = {0};
-led_action_t G_defaultAction     = LED_SOLID;
-color_t      G_defaultColor      = CYAN;
-color_t      G_defaultColor2     = GREEN;
-uint32_t     G_defaultBrightness = 255;
-uint32_t     G_defaultSpeed      = 99;
-char         G_turnOn[4]         = {'1', '9', '0', '0'}; // 7pm
-char         G_turnOff[4]        = {'0', '1', '0', '0'}; // 1am
+Defaults G_defaults;
 
+// Note, the Nextion Library expects all TFT objects to be defined globally
 // The pointer for button clicks
 NexGauge pointer  = NexGauge(0, 1, "pointer");
 
@@ -87,7 +43,7 @@ NexButton bCyan   = NexButton(1, 7, "bCyan");
 // The text for the second page where colors are selected
 NexText tChoose = NexText(1, 9, "t0");
 
-// The button for setting the default G_color settings
+// The button for setting the default color settings
 NexButton bSetDefaults = NexButton(9, 2, "bYes");
 
 // The Slider for the page with just brightness
@@ -118,7 +74,7 @@ NexText tHour2   = NexText(8, 18, "t4");
 NexText tMinute1 = NexText(8, 17, "t3");
 NexText tMinute2 = NexText(8, 16, "t2");
 
-// The variable for whether we are updating G_turnOn or G_turnOff
+// The variable for whether we are updating turnOn or turnOff
 NexVariable vOnOff = NexVariable(8, 24, "onOrOff");
 
 // The RTC module
@@ -174,14 +130,15 @@ NexTouch *nex_listen_list[] =
 **
 **  Globals Used: none
 **
-**  Globals Set: G_action, G_color, G_haveUpdate
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void showErrorLights()
 {
-    G_action = LED_SOLID;
-    G_color = RED;
-    G_haveUpdate = true; // no G_color selection, go ahead and update
+    Settings *settings = &G_settings;
+    settings->action = LED_SOLID;
+    settings->color = RED;
+    settings->haveUpdate = true;
 }
 
 
@@ -189,16 +146,17 @@ void showErrorLights()
 **
 **  Function Name: buttonActionPopCallback
 **
-**  Purpose: To check which G_action button was pressed and decide if 
+**  Purpose: To check which action button was pressed and decide if 
 **           the LEDs need instruction
 **
 **  Globals Used: none
 **
-**  Globals Set: G_action, G_haveUpdate, G_brightnessPosition, G_speedPosition
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void buttonActionPopCallback(void *ptr)
 {
+    Settings *settings = &G_settings;
     NexButton *button = (NexButton *) ptr;
     char buffer[100] = {0};
 
@@ -210,58 +168,58 @@ void buttonActionPopCallback(void *ptr)
 
     if (strcmp(buffer, "Solid Color") == 0)
     {
-        G_action = LED_SOLID;
+        settings->action = LED_SOLID;
         pColor.show();
         return;
     }
     else if (strcmp(buffer, "Pulse") == 0)
     {
-        G_action = LED_PULSE;
+        settings->action = LED_PULSE;
         pColor.show();
         return;
     }
     else if (strcmp(buffer, "Snake") == 0)
     {
-        G_action = LED_SNAKE;
+        settings->action = LED_SNAKE;
         pColor.show();
         return;
     }
     else if (strcmp(buffer, "Alternating") == 0)
     {
-        G_action = LED_ALTERNATING;
+        settings->action = LED_ALTERNATING;
         pColor.show();
         return;
     }
     else if (strcmp(buffer, "Rainbow") == 0)
     {
-        G_action = LED_RAINBOW;
-        G_haveUpdate = true; // no G_color selection, go ahead and update
+        settings->action = LED_RAINBOW;
+        settings->haveUpdate = true; // no color selection, go ahead and update
 
         // set brightness and speed to defaults
-        G_brightnessPosition = 127;
-        G_speedPosition = 50;
+        settings->brightnessPosition = 127;
+        settings->speedPosition = 50;
         pBrightnessSpeed.show();
         return;
     }
     else if (strcmp(buffer, "Dance Party") == 0)
     {
-        G_action = LED_DANCEPARTY;
-        G_haveUpdate = true; // no G_color selection, go ahead and update
+        settings->action = LED_DANCEPARTY;
+        settings->haveUpdate = true; // no color selection, go ahead and update
 
         // set brightness and speed to defaults
-        G_brightnessPosition = 127;
-        G_speedPosition = 50;
+        settings->brightnessPosition = 127;
+        settings->speedPosition = 50;
         pBrightnessSpeed.show();
         return;
     }
     else if (strcmp(buffer, "Off") == 0)
     {
-        G_action = LED_OFF;
-        G_haveUpdate = true; // no G_color selection for Off, update now
+        settings->action = LED_OFF;
+        settings->haveUpdate = true; // no color selection for Off, update now
 
         // set brightness and speed to defaults
-        G_brightnessPosition = 127;
-        G_speedPosition = 50;
+        settings->brightnessPosition = 127;
+        settings->speedPosition = 50;
         return;
     }
     else
@@ -277,20 +235,21 @@ void buttonActionPopCallback(void *ptr)
 **
 **  Function Name: buttonColorPopCallback
 **
-**  Purpose: To check which G_color button was pressed and decide if 
+**  Purpose: To check which color button was pressed and decide if 
 **           the LEDs need instruction
 **
-**  Globals Used: G_chosen
+**  Globals Used: G_settings
 **
-**  Globals Set: color, G_haveUpdate, G_brightnessPosition, G_speedPosition
-**               G_chosen
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void buttonColorPopCallback(void *ptr)
 {
+    Settings *settings = &G_settings;
+
     NexButton *button = (NexButton *) ptr;
     char buffer[100] = {0};
-    color_t tmpColor;
+    ColorVal tmpColor;
 
     if (button->getText(buffer, sizeof(buffer)) <= 0)
     {
@@ -329,30 +288,30 @@ void buttonColorPopCallback(void *ptr)
         return;
     }
 
-    if (G_chosen == 0)
+    if (settings->chosen == 0)
     {
-        G_color = tmpColor;
-        if (G_action == LED_ALTERNATING && G_color != ALL)
+        settings->color = tmpColor;
+        if (settings->action == LED_ALTERNATING && settings->color != ALL)
         {
-            G_chosen = 1;
+            settings->chosen = 1;
             tChoose.setText("Choose other color");
             return;
         }
     }
     else
     {
-        G_color2 = tmpColor;
-        G_chosen = 0;
+        settings->color2 = tmpColor;
+        settings->chosen = 0;
     }
 
-    G_haveUpdate = true;
+    settings->haveUpdate = true;
 
     // set brightness and speed to defaults
-    G_brightnessPosition = 127;
-    G_speedPosition = 50;
+    settings->brightnessPosition = 127;
+    settings->speedPosition = 50;
 
     // go to the next page
-    switch (G_action)
+    switch (settings->action)
     {
         case LED_SOLID:
             pBrightness.show();
@@ -381,11 +340,12 @@ void buttonColorPopCallback(void *ptr)
 **
 **  Globals Used: none
 **
-**  Globals Set: G_turnOn, G_turnOff
+**  Globals Set: G_defaults
 **
 ******************************************************************************/
 void buttonAutoClockPopCallback(void *ptr)
 {
+    Defaults *defaults = &G_defaults;
     uint32_t onOrOff;
     char newTime[4] = {0};
     char buffer[100] = {0};
@@ -440,11 +400,11 @@ void buttonAutoClockPopCallback(void *ptr)
   
     if (onOrOff == 0) // update auto on time
     {
-        memcpy(G_turnOn, newTime, sizeof(G_turnOn));
+        memcpy(defaults->turnOn, newTime, sizeof(defaults->turnOn));
     }
     else if (onOrOff == 1) // update auto off time
     {
-        memcpy(G_turnOff, newTime, sizeof(G_turnOn));
+        memcpy(defaults->turnOff, newTime, sizeof(defaults->turnOff));
     }
     else
     {
@@ -459,22 +419,24 @@ void buttonAutoClockPopCallback(void *ptr)
 **
 **  Function Name: buttonSetDefaultsPopCallback
 **
-**  Purpose: To update the G_color and animation for when the lights 
+**  Purpose: To update the G_settings->color and animation for when the lights 
 **           automatically turn on
 **
 **  Globals Used: none
 **
-**  Globals Set: G_defaultAction, DEFAULT_color_t, DEFAULT_color_t2, 
-**               G_defaultBrightness, G_defaultSpeed
+**  Globals Set: G_defaults
 **
 ******************************************************************************/
 void buttonSetDefaultsPopCallback(void *ptr)
 {
-    G_defaultAction     = G_action;
-    G_defaultColor      = G_color;
-    G_defaultColor2     = G_color2;
-    G_defaultBrightness = G_brightnessPosition;
-    G_defaultSpeed      = G_speedPosition;
+    Settings *settings = &G_settings;
+    Defaults *defaults = &G_defaults;
+
+    defaults->action     = settings->action;
+    defaults->color      = settings->color;
+    defaults->color2     = settings->color2;
+    defaults->brightness = settings->brightnessPosition;
+    defaults->speed      = settings->speedPosition;
 }
 
 
@@ -486,15 +448,16 @@ void buttonSetDefaultsPopCallback(void *ptr)
 **
 **  Globals Used: none
 **
-**  Globals Set: G_brightnessPosition
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void sliderBrightnessPopCallback(void *ptr)
 {
+    Settings *settings = &G_settings;
     // use the ptr passed so this function works for both brightness sliders
     NexSlider *slider = (NexSlider *) ptr;
-    slider->getValue(&G_brightnessPosition);
-    G_haveUpdate = true;
+    slider->getValue(&settings->brightnessPosition);
+    settings->haveUpdate = true;
 }
 
 
@@ -507,15 +470,16 @@ void sliderBrightnessPopCallback(void *ptr)
 **
 **  Globals Used: none
 **
-**  Globals Set: G_speedPosition
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void sliderSpeedPopCallback(void *ptr)
 {
+    Settings *settings = &G_settings;
     // use the ptr passed so this function works for both speed sliders
     NexSlider *slider = (NexSlider *) ptr;
-    slider->getValue(&G_speedPosition); // position between 0 and 100
-    G_haveUpdate = true;
+    slider->getValue(&settings->speedPosition); // position between 0 and 100
+    settings->haveUpdate = true;
 }
 
 
@@ -526,19 +490,20 @@ void sliderSpeedPopCallback(void *ptr)
 **  Purpose: To send instructions to the other arduino that is 
 **           controlling the LEDs
 **
-**  Globals Used: action, color, color2, G_brightnessPosition, G_speedPosition
+**  Globals Used: G_settings
 **
 **  Globals Set: none
 **
 ******************************************************************************/
 void sendInstructions()
 {
+    Settings *settings = &G_settings;
     Wire.beginTransmission(INSTRUCTION_PIN);
-    Wire.write(G_action);
-    Wire.write(G_color);
-    Wire.write(G_color2);
-    Wire.write(G_brightnessPosition);
-    Wire.write(G_speedPosition);
+    Wire.write(settings->action);
+    Wire.write(settings->color);
+    Wire.write(settings->color2);
+    Wire.write(settings->brightnessPosition);
+    Wire.write(settings->speedPosition);
     Wire.endTransmission();
 }
 
@@ -548,35 +513,39 @@ void sendInstructions()
 **
 **  Purpose: To automatically turn the lights on at a time set by the user
 **
-**  Globals Used: G_turnOn, G_turnOff, G_onTime
+**  Globals Used: G_defaults
 **
-**  Globals Set: action, color, color2, G_brightnessPosition, 
-**               G_speedPosition, G_haveUpdate, G_onTime
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void autoOn(char timeBuf[30])
 {
+    Settings *settings = &G_settings;
+    Defaults *defaults = &G_defaults;
+
     // if it's after the auto on time and we haven't turned on, turn on
-    if (timeBuf[11] == G_turnOn[0] && timeBuf[12] == G_turnOn[1] &&
-        timeBuf[14] == G_turnOn[2] && timeBuf[15] == G_turnOn[3] &&
-        G_onTime == false)
+    if (timeBuf[11] == defaults->turnOn[0] && 
+        timeBuf[12] == defaults->turnOn[1] &&
+        timeBuf[14] == defaults->turnOn[2] &&
+        timeBuf[15] == defaults->turnOn[3] &&
+        defaults->onTime == false)
     {
-        if (G_action == LED_OFF) // only do this if the lights are already off
+        if (settings->action == LED_OFF) // only do this if the lights are already off
         {
             // set the default action
-            G_action = G_defaultAction;
+            settings->action = defaults->action;
 
             // set the default colors
-            G_color = G_defaultColor;
-            G_color2 = G_defaultColor2;
+            settings->color = defaults->color;
+            settings->color2 = defaults->color2;
 
             // set brightness and speed to defaults
-            G_brightnessPosition = G_defaultBrightness;
-            G_speedPosition = G_defaultSpeed;
+            settings->brightnessPosition = defaults->brightness;
+            settings->speedPosition = defaults->speed;
 
-            G_haveUpdate = true; // defaults set, let's update
+            settings->haveUpdate = true; // defaults set, let's update
         }
-        G_onTime = true;
+        defaults->onTime = true;
     }
 }
 
@@ -587,24 +556,28 @@ void autoOn(char timeBuf[30])
 **
 **  Purpose: To automatically turn the lights off at a time set by the user
 **
-**  Globals Used: G_turnOn, G_turnOff
+**  Globals Used: G_defaults
 **
-**  Globals Set: action, G_haveUpdate, G_onTime, G_brightnessPosition, 
-**               G_speedPosition
+**  Globals Set: G_settings
 **
 ******************************************************************************/
 void autoOff(char timeBuf[30])
 {
+    Settings *settings = &G_settings;
+    Defaults *defaults = &G_defaults;
+
     // if it's after the auto off time and lights are on, turn off
-    if (timeBuf[11] == G_turnOff[0] && timeBuf[12] == G_turnOff[1] &&
-        timeBuf[14] == G_turnOff[2] && timeBuf[15] == G_turnOff[3] &&
-        G_onTime == true)
+    if (timeBuf[11] == defaults->turnOff[0] &&
+        timeBuf[12] == defaults->turnOff[1] &&
+        timeBuf[14] == defaults->turnOff[2] &&
+        timeBuf[15] == defaults->turnOff[3] &&
+        defaults->onTime == true)
     {
-        G_action = LED_OFF;
-        G_haveUpdate = true;
-        G_onTime = false;
-        G_brightnessPosition = 127;
-        G_speedPosition = 50;
+        settings->action = LED_OFF;
+        settings->haveUpdate = true;
+        defaults->onTime = false;
+        settings->brightnessPosition = 127;
+        settings->speedPosition = 50;
     }
 }
 
@@ -622,6 +595,11 @@ void autoOff(char timeBuf[30])
 ******************************************************************************/
 void setup(void)
 {
+    // variables for tracking how much time has passed.
+    unsigned long currentTime;
+    unsigned long previousTime = 0;
+    char          timeBuf[30]  = {0};
+
     // The pro micro uses Serial1 to talk to the Nextion display
     // if you are using a different microcontroller this may need
     // to be updated
@@ -640,7 +618,7 @@ void setup(void)
     bDance.attachPop(buttonActionPopCallback, &bDance);
     bOff.attachPop(buttonActionPopCallback, &bOff);
 
-    // Attach callback functions to G_color selection buttons
+    // Attach callback functions to G_settings->color selection buttons
     bAll.attachPop(buttonColorPopCallback, &bAll);
     bGreen.attachPop(buttonColorPopCallback, &bGreen);
     bBlue.attachPop(buttonColorPopCallback, &bBlue);
@@ -668,42 +646,32 @@ void setup(void)
 
     // Attach callback function to default settings buttons
     bSetDefaults.attachPop(buttonSetDefaultsPopCallback, &bSetDefaults);
-}
 
+    Settings *settings = &G_settings;
 
-/******************************************************************************
-**
-**  Function Name: loop
-**
-**  Purpose: The main loop for the arduino. Sends instructions to the other 
-**           arduino and checks if it's time to automatically turn on/off
-**
-**  Globals Used: G_currentTime, G_previousTime, G_haveUpdate
-**
-**  Globals Set: G_currentTime, G_previousTime, G_haveUpdate, G_timeBuf
-**
-******************************************************************************/
-void loop()
-{
-    nexLoop(nex_listen_list);
-
-    // if we have an update and the other arduino is ready, send the update
-    if (G_haveUpdate && digitalRead(READY_PIN) == HIGH)
+    // the main loop to update the follower arduino
+    while (1)
     {
-        sendInstructions();
-        G_haveUpdate = false;
-    }
-
-    // check if it's time to automatically turn off every 45 seconds
-    G_currentTime = millis();
-
-    // the second case happens when millis() rolls over to 0
-    if (G_currentTime - G_previousTime > 45000 ||
-        G_previousTime > G_currentTime)
-    {
-        rtc.read_rtc_time(G_timeBuf, 30);
-        autoOn(G_timeBuf);
-        autoOff(G_timeBuf);
-        G_previousTime = G_currentTime;
+        nexLoop(nex_listen_list);
+    
+        // if we have an update and the other arduino is ready, send the update
+        if (settings->haveUpdate && digitalRead(READY_PIN) == HIGH)
+        {
+            sendInstructions();
+            settings->haveUpdate = false;
+        }
+    
+        // check if it's time to automatically turn off every 45 seconds
+        currentTime = millis();
+    
+        // the second case happens when millis() rolls over to 0
+        if (currentTime - previousTime > 45000 ||
+            previousTime > currentTime)
+        {
+            rtc.read_rtc_time(timeBuf, 30);
+            autoOn(timeBuf);
+            autoOff(timeBuf);
+            previousTime = currentTime;
+        }
     }
 }
