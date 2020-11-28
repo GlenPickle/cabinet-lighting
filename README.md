@@ -30,15 +30,15 @@ In order for a Nextion callback function or Wire receiveEvent to update variable
 ![](https://imgur.com/Vy53HG7.jpg)
 ![](https://imgur.com/F3ouQmn.jpg)
 ### Pulse Effect:
-<img src="https://imgur.com/Kig4Fbj.gif" width="400"/>
+<img src="https://imgur.com/GbKNshr.gif"/>
 ### Alternating Effect
-<img src="https://imgur.com/s1GE6zj.gif" width="400"/>
+<img src="https://imgur.com/z60WaX3.gif"/>
 ### Snake Effect
-<img src="https://imgur.com/RDVmpQt.gif" width="400"/>
+<img src="https://imgur.com/rrhr02Y.gif"/>
 ### Rainbow Effect
-<img src="https://imgur.com/sl5Ig2u.gif" width="400"/>
+<img src="https://imgur.com/9m4dEYW.gif"/>
 ### Dance Party Effect
-<img src="https://imgur.com/AlfyOWI.gif" width="400"/>
+<img src="https://imgur.com/rD1bcEg.gif"/>
 
 ## How To Recreate:
 ### Software:
